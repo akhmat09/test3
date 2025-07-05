@@ -2,7 +2,7 @@ package jm.task.core.jdbc.model;
 
 import javax.persistence.*;
 
-@Table(name="users")
+@Table(name = "users")
 @Entity
 public class User {
     @Id
@@ -12,11 +12,12 @@ public class User {
     @Column(name = "name")
     private String name;
 
-    @Column(name = "lastname") // явно указываем имя столбца
+    @Column(name = "last_name") // явно указываем имя столбца
     private String lastName;
 
     @Column(name = "age") // явно указываем имя столбца
     private byte age;
+
     public User() {
 
     }

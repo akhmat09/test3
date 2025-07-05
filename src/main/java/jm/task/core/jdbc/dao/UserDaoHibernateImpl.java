@@ -9,11 +9,12 @@ import org.hibernate.Transaction;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Root;
+import java.util.ArrayList;
 import java.util.List;
 
 public class UserDaoHibernateImpl implements UserDao {
 
-    private static final SessionFactory sessionFactory = Util.getSessionFactory();
+    private final Util hibernateUtil = new Util();
 
     public UserDaoHibernateImpl() {
 
@@ -21,78 +22,93 @@ public class UserDaoHibernateImpl implements UserDao {
 
     @Override
     public void createUsersTable() {
-        try (Session session = sessionFactory.openSession()) {
+        try (Session session = hibernateUtil.getSessionFactory().openSession()) {
             session.beginTransaction();
-            session.createSQLQuery("CREATE TABLE IF NOT EXISTS users (\n" +
-                    "  `id` INT NOT NULL AUTO_INCREMENT,\n" +
-                    "  `name` VARCHAR(45) NOT NULL,\n" +
-                    "  `lastname` VARCHAR(45) NOT NULL,\n" +
-                    "  `age` INT NOT NULL,\n" +
-                    "  PRIMARY KEY (`id`));").executeUpdate();
+
+            session.createNativeQuery(
+                    "CREATE TABLE IF NOT EXISTS users (" +
+                            "id BIGINT NOT NULL AUTO_INCREMENT, " +
+                            "name VARCHAR(255) NOT NULL, " +
+                            "last_name VARCHAR(255) NOT NULL, " +
+                            "age SMALLINT NOT NULL, " +
+                            "PRIMARY KEY (id))"
+            ).executeUpdate();
+
             session.getTransaction().commit();
-        } catch (Exception e) {
-            sessionFactory.getCurrentSession().getTransaction().rollback();
         }
+
     }
 
     @Override
     public void dropUsersTable() {
-        try (Session session = sessionFactory.openSession()) {
-            session.beginTransaction();
-            session.createSQLQuery("DROP TABLE IF EXISTS users").addEntity(User.class).executeUpdate();
-            session.getTransaction().commit();
+        Transaction transaction = null;
+        try (Session session = hibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            session.createNativeQuery("DROP TABLE IF EXISTS users").executeUpdate();
+            transaction.commit();
         } catch (Exception e) {
-            sessionFactory.getCurrentSession().getTransaction().rollback();
+            if (transaction != null) {
+                transaction.rollback();
+            }
+            throw new RuntimeException("Failed to drop users table", e);
         }
     }
 
     @Override
     public void saveUser(String name, String lastName, byte age) {
-        try (Session session = sessionFactory.openSession()){
-            session.beginTransaction();
-            session.save(new User(name, lastName, age));
-            session.getTransaction().commit();
+        Transaction transaction = null;
+        try (Session session = hibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            User user = new User(name, lastName, age);
+            session.persist(user);
+            transaction.commit();
         } catch (Exception e) {
-            sessionFactory.getCurrentSession().getTransaction().rollback();
+            if (transaction != null) {
+                transaction.rollback();
+            }
+            throw new RuntimeException("Failed to save user: " + name + " " + lastName, e);
         }
     }
 
     @Override
     public void removeUserById(long id) {
-        try (Session session = sessionFactory.openSession()) {
-            session.beginTransaction();
-            session.createSQLQuery("DELETE FROM users WHERE id=" + id).executeUpdate();
-            session.getTransaction().commit();
+        Transaction transaction = null;
+        try (Session session = hibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            User user = session.get(User.class, id);
+            if (user != null) {
+                session.remove(user);  // Используем remove вместо delete (JPA)
+            }
+            transaction.commit();
         } catch (Exception e) {
-            sessionFactory.getCurrentSession().getTransaction().rollback();
+            if (transaction != null) {
+                transaction.rollback();
+            }
+            throw new RuntimeException("Failed to remove user with id: " + id, e);
         }
     }
 
     @Override
     public List<User> getAllUsers() {
-        List<User> users = null;
-        try (Session session = sessionFactory.openSession()) {
-            session.beginTransaction();
-            CriteriaBuilder builder = session.getCriteriaBuilder();
-            CriteriaQuery<User> criteria = builder.createQuery(User.class);
-            Root<User> root = criteria.from(User.class);
-            criteria.select(root);
-            users = session.createQuery(criteria).getResultList();
-            session.getTransaction().commit();
+        try (Session session = hibernateUtil.getSessionFactory().openSession()) {
+            return session.createQuery("FROM User", User.class).getResultList();
         } catch (Exception e) {
-            sessionFactory.getCurrentSession().getTransaction().rollback();
+            throw new RuntimeException("Failed to retrieve users", e);
         }
-        return users;
     }
 
     @Override
     public void cleanUsersTable() {
-        try (Session session = sessionFactory.openSession()) {
-            session.beginTransaction();
-            session.createSQLQuery("TRUNCATE TABLE users").executeUpdate();
-            session.getTransaction().commit();
+        Transaction transaction = null;
+        try (Session session = hibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            session.createNativeQuery("TRUNCATE TABLE users").executeUpdate();
+            transaction.commit();
         } catch (Exception e) {
-            sessionFactory.getCurrentSession().getTransaction().rollback();
+            if (transaction != null) {
+                transaction.rollback();
+            }
+            throw new RuntimeException("Failed to clean users table", e);
         }
     }
 }
